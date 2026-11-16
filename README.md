@@ -126,3 +126,7 @@ Agents run in an empty temporary directory and get only read-only research tools
 - **OpenCode** runs with an empty config directory, so your plugins never load and your global config is never touched; your `opencode auth` logins still work.
 
 None of them can run shell commands. The research tools refuse to fetch private or local network addresses. A session that hits `--timeout` is killed along with every process it started.
+
+## License
+
+MIT
