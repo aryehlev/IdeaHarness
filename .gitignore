@@ -2,3 +2,6 @@ runs/
 __pycache__/
 .DS_Store
 profile.md
+*.egg-info/
+build/
+dist/

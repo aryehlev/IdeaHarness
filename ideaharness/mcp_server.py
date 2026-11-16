@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Minimal stdio MCP server exposing IdeaHarness's read-only research tools.
 
-Any MCP-capable harness can use it:  python3 /path/to/IdeaHarness/harness/mcp_server.py
+Any MCP-capable harness can use it:  ideaharness mcp
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from harness import __version__  # noqa: E402
-from harness.tools import TOOLS, call_tool  # noqa: E402
+from ideaharness import __version__  # noqa: E402
+from ideaharness.tools import TOOLS, call_tool  # noqa: E402
 
 INSTRUCTIONS = (
     "Read-only research tools for judging project ideas: GitHub repository and issue search with "

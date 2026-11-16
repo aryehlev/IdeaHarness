@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import functools
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -13,14 +14,18 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
+from . import __version__
 from . import profile as profiles
 from .backends import ALL_KINDS, Backend, BackendError, Options, Outcome, make_backend
 from .schemas import IDEA_SCHEMA, SCORE_KEYS, VERDICT_SCHEMA, extract_json, schema_instructions, validate
 from .ui import bold, clip, confirm, cyan, dim, green, interactive, magenta, red, yellow
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-PROMPTS = ROOT / "prompts"
-COMMANDS = ("run", "profile", "doctor")
+PKG = pathlib.Path(__file__).resolve().parent
+PROMPTS = PKG / "prompts"
+BRIEFS = PKG / "briefs"
+# Your profile and run folders live here (not inside the installed package).
+HOME_DIR = pathlib.Path(os.environ.get("IDEAHARNESS_HOME") or "~/.ideaharness").expanduser()
+COMMANDS = ("run", "profile", "doctor", "mcp")
 
 
 class AgentError(RuntimeError):
@@ -202,7 +207,7 @@ def options(cfg) -> Options:
 def ready(backend: Backend) -> Backend:
     reason = backend.check()
     if reason:
-        raise SystemExit(red(f"{backend.label}: {reason}") + dim("\n(run `python3 ideaharness.py doctor` to see every harness)"))
+        raise SystemExit(red(f"{backend.label}: {reason}") + dim("\n(run `ideaharness doctor` to see every harness)"))
     return backend
 
 
@@ -256,12 +261,12 @@ def cmd_doctor(cfg) -> int:
                                                               if ok else "not logged in: GitHub searches are rate limited"))
     else:
         print(f"  {yellow('!')} gh " + dim("not installed: GitHub searches fall back to anonymous API calls"))
-    print(f"  {green('✓')} MCP server " + dim(f"{sys.executable} {ROOT / 'harness' / 'mcp_server.py'}"))
+    print(f"  {green('✓')} MCP server " + dim("`ideaharness mcp` (stdio), for harnesses you wire up yourself"))
 
     print(bold("\nMemory a profile can be built from"))
     profiles.print_sources(profiles.discover_memory(cfg.memory or []), None)
     path = pathlib.Path(cfg.profile)
-    print(bold("\nProfile ") + (f"{path}" if path.exists() else dim(f"not built yet (python3 ideaharness.py profile)")))
+    print(bold("\nProfile ") + (f"{path}" if path.exists() else dim(f"{path} not built yet (ideaharness profile)")))
     return 0
 
 
@@ -408,12 +413,12 @@ def cmd_run(cfg) -> int:
             print(yellow(f"\nNo idea survived {cfg.max_rounds} rounds."))
     except KeyboardInterrupt:
         save_json(state_path, state)
-        print(yellow(f"\nInterrupted. Resume with: python3 ideaharness.py --resume {run_dir}"))
+        print(yellow(f"\nInterrupted. Resume with: ideaharness --resume {run_dir}"))
         return 130
     except AgentError as exc:
         spend(exc.usage)
         save_json(state_path, state)
-        print(red(f"\n{exc}") + f"\nResume with: python3 ideaharness.py --resume {run_dir}")
+        print(red(f"\n{exc}") + f"\nResume with: ideaharness --resume {run_dir}")
         return 1
 
     if not state.get("winner") and state["graveyard"]:
@@ -421,7 +426,7 @@ def cmd_run(cfg) -> int:
         for g in sorted(state["graveyard"], key=lambda g: -sum(g["scores"].values()))[:3]:
             avg = sum(g["scores"].values()) / len(SCORE_KEYS)
             print(f"  {avg:.1f}  {g['name']}: {clip(g['cause_of_death'], 120)}")
-        print(dim(f"  continue with: python3 ideaharness.py --resume {run_dir} --max-rounds {cfg.max_rounds + 10}"))
+        print(dim(f"  continue with: ideaharness --resume {run_dir} --max-rounds {cfg.max_rounds + 10}"))
 
     spent = Usage(cost=state["cost"], cost_known=state["cost"] > 0, tokens=state.get("tokens", 0))
     print(dim(f"\nused so far: {spent.text()} (costs at list price, where the harness reports them) · log: {run_dir / 'log.md'}"))
@@ -449,7 +454,7 @@ def write_winner(run_dir, state, idea, verdicts, judges, hunter_label) -> pathli
 # ---------------------------------------------------------------- argument parsing
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    if not argv or argv[0] not in COMMANDS + ("-h", "--help"):
+    if not argv or argv[0] not in COMMANDS + ("-h", "--help", "--version"):
         argv = ["run", *argv]
 
     common = argparse.ArgumentParser(add_help=False)
@@ -467,18 +472,19 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     g.add_argument("--api-max-turns", type=int, default=40, help="tool-calling turns for API backends")
     g.add_argument("--num-ctx", type=int, default=32768, help="context window to load Ollama models with")
     p = common.add_argument_group("profile")
-    p.add_argument("--profile", default=str(ROOT / "profile.md"), metavar="FILE", help="profile of the person the ideas are for")
+    p.add_argument("--profile", default=str(HOME_DIR / "profile.md"), metavar="FILE", help="profile of the person the ideas are for")
     p.add_argument("--memory", action="append", metavar="PATH", help="extra memory file or folder to read (repeatable)")
     p.add_argument("--no-github", action="store_true", help="don't read your public GitHub repos into the profile")
     p.add_argument("--no-questions", action="store_true", help="don't ask questions while building the profile")
     p.add_argument("--yes", "-y", action="store_true", help="don't ask before sending memory files to an agent")
-    common.add_argument("--out", default=str(ROOT / "runs"), metavar="DIR", help="directory for run folders")
+    common.add_argument("--out", default=str(HOME_DIR / "runs"), metavar="DIR", help="directory for run folders")
 
     parser = argparse.ArgumentParser(
-        prog="ideaharness.py",
+        prog="ideaharness",
         description="A Hunter agent pitches ideas for you; Destroyer agents kill them until one survives.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    parser.add_argument("--version", action="version", version=f"ideaharness {__version__}")
     sub = parser.add_subparsers(dest="command")
 
     run = sub.add_parser("run", parents=[common], help="hunt for an idea (the default command)",
@@ -486,7 +492,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     run.add_argument("--hunter", metavar="SPEC", help="harness for the Hunter (default: --agent)")
     run.add_argument("--destroyer", action="append", metavar="SPEC",
                      help="harness for the Destroyers; repeat to rotate harnesses through the gauntlet (default: --agent)")
-    run.add_argument("--brief", default=str(ROOT / "briefs" / "default.md"), help="what kind of idea to look for")
+    run.add_argument("--brief", default=str(BRIEFS / "default.md"), help="what kind of idea to look for")
     run.add_argument("--focus", help="extra direction for this run, e.g. 'tools for Rust developers'")
     run.add_argument("--no-profile", action="store_true", help="hunt without a profile")
     run.add_argument("--max-rounds", type=int, default=12, help="give up after this many pitches")
@@ -500,6 +506,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     prof.add_argument("--show", action="store_true", help="print the current profile and exit")
 
     sub.add_parser("doctor", parents=[common], help="show which harnesses, tools and memory files are available")
+    sub.add_parser("mcp", help="run the read-only research tools as a stdio MCP server")
     return parser.parse_args(argv)
 
 
@@ -510,6 +517,10 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_profile(cfg)
         if cfg.command == "doctor":
             return cmd_doctor(cfg)
+        if cfg.command == "mcp":
+            from .mcp_server import main as serve
+            serve()
+            return 0
         return cmd_run(cfg)
     except BackendError as exc:
         print(red(str(exc)), file=sys.stderr)

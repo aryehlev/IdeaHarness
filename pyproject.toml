@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ideaharness"
+dynamic = ["version"]
+description = "A Hunter agent pitches project ideas for you; Destroyer agents kill them until one survives. Works with Claude Code, Codex, Gemini CLI, OpenCode, DeepSeek, Ollama and more."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+keywords = ["ai-agents", "claude-code", "codex", "deepseek", "mcp", "ideas"]
+
+[project.scripts]
+ideaharness = "ideaharness.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/aryehlev/IdeaHarness"
+
+[tool.setuptools]
+packages = ["ideaharness"]
+
+[tool.setuptools.dynamic]
+version = { attr = "ideaharness.__version__" }
+
+[tool.setuptools.package-data]
+ideaharness = ["prompts/*.md", "briefs/*.md"]

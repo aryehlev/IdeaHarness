@@ -568,7 +568,8 @@ class APIBackend(Backend):
     def check(self):
         if not self.base:
             return "no endpoint: pass --api-base or set IDEAHARNESS_API_BASE"
-        if self.key_env and not os.environ.get(self.key_env) and self.kind not in LOCAL:
+        keyless = self.kind in LOCAL or (self.kind == "api" and not self.opts.api_key_env)  # self-hosted endpoints often need no key
+        if self.key_env and not os.environ.get(self.key_env) and not keyless:
             return f"{self.key_env} is not set"
         if self.kind in LOCAL:
             try:

@@ -199,11 +199,11 @@ def build(*, run_agent, backend, out_path: pathlib.Path, transcript_dir: pathlib
         if not assume_yes:
             if not interactive:
                 raise SystemExit("Refusing to send memory files without confirmation: rerun with --yes, "
-                                 "or run `python3 ideaharness.py profile` in a terminal.")
+                                 "or run `ideaharness profile` in a terminal.")
             if not confirm(msg):
                 sources, repos = [], None
         if sources or repos:
-            system = (pathlib.Path(__file__).resolve().parent.parent / "prompts" / "profiler.md").read_text()
+            system = (pathlib.Path(__file__).resolve().parent / "prompts" / "profiler.md").read_text()
             system = system.replace("{{DATE}}", dt.date.today().isoformat())
             data, _usage = run_agent(
                 role="profiler", backend=backend, system=system, schema=PROFILE_SCHEMA,
@@ -226,13 +226,13 @@ def build(*, run_agent, backend, out_path: pathlib.Path, transcript_dir: pathlib
                 answers.append((q, a))
     elif not draft:
         print(yellow("No agent memory and no answers: the profile will be empty. "
-                     "Run `python3 ideaharness.py profile` in a terminal to answer a few questions."))
+                     "Run `ideaharness profile` in a terminal to answer a few questions."))
     unanswered = [q for q in [*asked, CLOSING_QUESTION] if q not in {q for q, _ in answers}] if not answers else []
 
     used = sorted({s.harness for s in sources} | ({"GitHub"} if repos else set()))
     header = (f"<!-- Built by IdeaHarness on {dt.date.today().isoformat()} from: "
               f"{', '.join(used) if used else 'interview only'}. Every agent reads this file on every run; "
-              f"edit it freely. Rebuild with: python3 ideaharness.py profile -->\n\n")
+              f"edit it freely. Rebuild with: ideaharness profile -->\n\n")
     body = draft or "# Profile\n"
     if answers:
         body += "\n\n## In their own words\n\n" + "\n\n".join(f"**{q}**\n{a}" for q, a in answers)
@@ -240,6 +240,7 @@ def build(*, run_agent, backend, out_path: pathlib.Path, transcript_dir: pathlib
         body += ("\n\n## Open questions\n\n<!-- Answer under each question; the agents read your answers. -->\n\n"
                  + "\n\n".join(f"**{q}**\n" for q in unanswered))
     text = header + body.strip() + "\n"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(text)
     print(green(f"\nSaved {out_path}") + dim(" — edit it any time; it is sent to the agents on every run."))
     return text
